@@ -74,7 +74,18 @@ class Room(object):
     def add_thing(self, thing):
         self.things.append(thing)
 
-    # todo: add trigger to reveal hidden doors & alert user of the change
+    def thing_there(self, thing):
+        return self.things.__contains__(thing)
+
+    def thing_missing(self, thing):
+        return not self.things.__contains__(thing)
+
+    def make_visible(self):
+        self.is_visible = True
+
+    def make_invisible(self):
+        self.is_visible = False
+
     # todo: show open directions of travel in the room when asking for input
 
     def describe(self):
@@ -120,6 +131,7 @@ class GameEnvironment(object):
 
     def __init__(self):
         self.player = Player()
+        self.triggers = []
 
         r_a = Room('your neighbor\'s room')
         r_b = Room('your room')
@@ -131,6 +143,7 @@ class GameEnvironment(object):
         r_h = Room('a secret room attached to the office', False)
 
         t_a = Thing("a suspicious looking [book] in a bookcase")
+        self.add_trigger(r_e.thing_missing, r_h.make_visible, "A secret room has been revealed.", t_a)
 
         r_a.add_south(r_c)
         r_b.add_south(r_d)
@@ -187,6 +200,22 @@ class GameEnvironment(object):
         else:
             return False, Room.M_NOT_INSIDE % thing_name
 
+    def add_trigger(self, condition, result, message, args):
+        self.triggers.append((condition, result, message, args))
+
+    def execute_triggers(self):
+        messages = None
+        for trigger in self.triggers:
+            condition, result, message, args = trigger
+            if condition(args):
+                result()
+                self.triggers.remove(trigger)
+                if messages is None:
+                    messages = message
+                else:
+                    messages += "\n" + message
+        return messages
+
 
 class Commands(object):
     HELP, EXIT, NORTH, SOUTH, EAST, WEST, TAKE = range(7)
@@ -236,6 +265,7 @@ class Adventure(object):
             return
         else:
             self.ui.show(message)
+            self.notify_state_changes(self.environment.execute_triggers())
 
     @staticmethod
     def parse_command(input_string):
@@ -272,6 +302,10 @@ class Adventure(object):
 
     def do_help(self):
         return True, self.M_START
+
+    def notify_state_changes(self, message):
+        if message is not None:
+            self.ui.show(message)
 
 
 def main():
