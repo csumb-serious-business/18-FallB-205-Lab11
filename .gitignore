@@ -1,2 +1,6 @@
 # jetbrains
 .idea
+
+
+# compiled output
+*.pyc
