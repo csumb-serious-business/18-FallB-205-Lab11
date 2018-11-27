@@ -877,4 +877,129 @@ def main():
     game = Adventure(UserInterface.CONSOLE)
     game.play()
 
-# todo: add unit tests
+
+# === unit tests =============================================================#
+def run_test_suite():
+    test_suite = [
+        t_room_add_north,
+        t_room_add_south,
+        t_room_add_thing,
+        t_room_get_can_be_target_of,
+
+    ]
+
+    for test in test_suite:
+        test()
+
+
+# --- Room tests -------------------------------------------------------------#
+def t_room_add_north():
+    subject = Room('subject')
+    other = Room('other')
+    subject.add_north(other)
+
+    check_true(subject.room_north == other)
+    check_true(other.room_south == subject)
+
+
+def t_room_add_south():
+    subject = Room('subject')
+    other = Room('other')
+    subject.add_south(other)
+
+    check_true(subject.room_south == other)
+    check_true(other.room_north == subject)
+
+
+# todo: add all room directions
+
+def t_room_add_thing():
+    subject = Room('subject')
+    thing = Thing('thing', 'a test thing')
+
+    check_false(subject.thing_there(thing))
+    check_true(subject.thing_missing(thing))
+    subject.add_thing(thing)
+
+    check_true(subject.thing_there(thing))
+    check_false(subject.thing_missing(thing))
+
+
+# todo: make_visible, make_invisible
+
+def t_room_get_can_be_target_of():
+    subject = Room('subject')
+    thing = Thing('thing', 'a test thing')
+    thing.add_target_of(Commands.TAKE, 'testing')
+
+    expect = None
+    actual = subject.get_can_be_target_of(Commands.TAKE)
+
+    check(expect, actual)
+    subject.add_thing(thing)
+
+    expect = thing
+    actual = subject.get_can_be_target_of(Commands.TAKE)
+    check(expect, actual)
+
+
+# todo: get_thing *
+# todo: describe *
+
+# --- thing tests ------------------------------------------------------------#
+# todo add_source_of
+# todo add_target_of
+# todo remove_source_of
+# todo remove_target_of
+# todo can_be_target_of *
+# todo cannot_be_target_of *
+# todo get_target_message_for_action *
+# todo can_be_source_of *
+
+# --- player tests -----------------------------------------------------------#
+# todo has
+# todo get
+# todo remove_from_inventory *
+# todo item_that_can *
+
+# --- game environment tests -------------------------------------------------#
+# todo go_north, go_south, go_east, go_west
+# todo player_take *
+# todo player_throw *
+# todo player_lock *
+# todo player_unlock *
+# todo win_game
+# todo lose_game
+# todo add_trigger
+# todo execute_triggers *
+
+# --- adventure tests --------------------------------------------------------#
+# todo check_for_loss
+# todo check_for_win
+# todo next_command
+# todo parse_command *
+# todo execute_command *
+# todo do_exit
+# todo do_help
+# todo notify_state_change *
+
+# === a rudimentary unit testing framework ===================================#
+def check(expect, actual):
+    import sys
+    caller = sys._getframe(1).f_code.co_name
+    result = 'PASS' if expect == actual else 'FAIL'
+    print("%s -- %s -- expected: %s, actual: %s" % (caller, result, expect, actual))
+
+
+def check_true(actual):
+    import sys
+    caller = sys._getframe(1).f_code.co_name
+    result = 'PASS' if actual else 'FAIL'
+    print("%s -- %s -- expected: True, actual: %s" % (caller, result, actual))
+
+
+def check_false(actual):
+    import sys
+    caller = sys._getframe(1).f_code.co_name
+    result = 'PASS' if not actual else 'FAIL'
+    print("%s -- %s -- expected: False, actual: %s" % (caller, result, actual))
