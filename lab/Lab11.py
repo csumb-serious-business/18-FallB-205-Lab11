@@ -35,21 +35,19 @@ class Room(object):
     M_CANNOT_ADD = "Error: can't add a room to an already used location"
     M_NO_PASSAGE = "You find no passage to the %s."
     M_NOW_IN_ROOM = "You are now in %s."
+    M_INSIDE = "Inside you see: "
+    M_NOT_INSIDE = "There was no %s in the room."
 
-    def __init__(self, name):
+    def __init__(self, name, is_visible=True):
         self.name = name
+        self.is_visible = is_visible
         self.room_north = None
         self.room_south = None
         self.room_east = None
         self.room_west = None
+        self.things = []
 
     def add_north(self, other):
-        """
-        adds a room in the north position for this room
-        adds this room to the south of the other room
-        :param other: the other room to attach
-        :return: void/Unit
-        """
         if self.room_north is not None or other.room_south is not None:
             raise ValueError(self.M_CANNOT_ADD)
         self.room_north = other
@@ -73,11 +71,52 @@ class Room(object):
         self.room_west = other
         other.room_east = self
 
+    def add_thing(self, thing):
+        self.things.append(thing)
+
+
+    # todo: add trigger to reveal hidden doors & alert user of the change
+    # todo: show open directions of travel in the room when asking for input
+
+    def describe(self):
+        message = self.M_NOW_IN_ROOM % self.name
+        list_str = None
+        if len(self.things) > 0:
+            for thing in self.things:
+                if list_str is None:
+                    list_str = thing.name
+                else:
+                    list_str += ', ' + thing.name
+            message += '\n' + self.M_INSIDE + list_str
+        return message
+
+
+class Thing(object):
+    def __init__(self, name, secret_message=None, direction=None):
+        self.name = name
+        self.secret_message = secret_message
+        self.direction = direction
+
+    def add_secret_message(self, other):
+        self.secret_message = other
+    #secret message to display upon finding the object
+
+    def add_direction(self, other):
+        self.direction = other
+        #added direction to indicate what path opens when you fins an item
+
+
+class Player(object):
+    M_TOOK = "You took the %s"
+
+    def __init__(self):
+        self.inventory = []
+
 
 class GameEnvironment(object):
     # A   B
     # |   |
-    # C - D - E
+    # C - D - E - H
     #     |   |
     #     F - G
     #
@@ -88,53 +127,91 @@ class GameEnvironment(object):
     # E office
     # F rec room
     # G lobby
+    # H secret room
 
     def __init__(self):
-        a = Room('your neighbor\'s room')
-        b = Room('your room')
-        c = Room('the far hall')
-        d = Room('the hallway in front of your room')
-        e = Room('the office')
-        f = Room('the recreation room')
-        g = Room('the lobby')
+        self.player = Player()
 
-        a.add_south(c)
-        b.add_south(d)
-        c.add_east(d)
-        d.add_east(e)
-        d.add_south(f)
-        e.add_south(g)
-        f.add_east(g)
+        r_a = Room('your neighbor\'s room')
+        r_b = Room('your room')
+        r_c = Room('the far hall')
+        r_d = Room('the hallway in front of your room')
+        r_e = Room('the office')
+        r_f = Room('the recreation room')
+        r_g = Room('the lobby')
+        r_h = Room('a secret room attached to the office', False)
 
-        self.current_room = b
+        t_a = Thing("a suspicious looking [book] in a bookcase")
+        t_a.add_secret_message('You hear a rumble as a bookcase to the East moves to reveal a passage')
+        t_a.add_direction('EAST')
+
+        r_a.add_south(r_c)
+        r_b.add_south(r_d)
+        r_c.add_east(r_d)
+        r_d.add_east(r_e)
+        r_d.add_south(r_f)
+        r_e.add_south(r_g)
+        r_e.add_east(r_h)
+        r_f.add_east(r_g)
+
+        r_e.add_thing(t_a)
+
+
+        self.current_room = r_b
 
     def go_north(self):
         if self.current_room.room_north is not None:
-            self.current_room = self.current_room.room_north
-            return True, Room.M_NOW_IN_ROOM % self.current_room.name
+            if self.current_room.room_north.is_visible:
+                self.current_room = self.current_room.room_north
+                return True, self.current_room.describe()
         return False, Room.M_NO_PASSAGE % 'north'
 
     def go_south(self):
         if self.current_room.room_south is not None:
-            self.current_room = self.current_room.room_south
-            return True, Room.M_NOW_IN_ROOM % self.current_room.name
+            if self.current_room.room_south.is_visible:
+                self.current_room = self.current_room.room_south
+                return True, self.current_room.describe()
         return False, Room.M_NO_PASSAGE % 'south'
 
     def go_east(self):
         if self.current_room.room_east is not None:
-            self.current_room = self.current_room.room_east
-            return True, Room.M_NOW_IN_ROOM % self.current_room.name
+            if self.current_room.room_east.is_visible:
+                self.current_room = self.current_room.room_east
+                return True, self.current_room.describe()
         return False, Room.M_NO_PASSAGE % 'east'
 
     def go_west(self):
         if self.current_room.room_west is not None:
-            self.current_room = self.current_room.room_west
-            return True, Room.M_NOW_IN_ROOM % self.current_room.name
+            if self.current_room.room_west.is_visible:
+                self.current_room = self.current_room.room_west
+                return True, self.current_room.describe()
         return False, Room.M_NO_PASSAGE % 'west'
+
+    def player_take(self, thing_name):
+        found = None
+        for thing in self.current_room.things:
+            import re
+            if re.compile(r'(' + thing_name + ')').search(thing.name):
+                found = thing
+                break
+        if found is not None:
+            self.player.inventory.append(found)
+            self.current_room.things.remove(found)
+            if found.direction == 'NORTH':
+                self.current_room.room_north.is_visible = True # these check which direction to make visible based on the item
+            if found.direction == 'EAST':
+                self.current_room.room_east.is_visible = True
+            if found.direction == 'SOUTH':
+                self.current_room.room_south.is_visible = True
+            if found.direction == 'WEST':
+                self.current_room.room_west.is_visible = True
+            return True, self.player.M_TOOK % thing_name + '\n' + found.secret_message # displays the took message along with and endline and the secret message
+        else:
+            return False, Room.M_NOT_INSIDE % thing_name
 
 
 class Commands(object):
-    HELP, EXIT, NORTH, SOUTH, EAST, WEST = range(6)
+    HELP, EXIT, NORTH, SOUTH, EAST, WEST, TAKE = range(7)
 
 
 class Adventure(object):
@@ -169,13 +246,13 @@ class Adventure(object):
 
         user_in = self.ui.ask(to_ask)
 
-        parsed = self.parse_command(user_in)
+        parsed, param = self.parse_command(user_in)
 
         if parsed is None:
             self.next_command(last_invalid=user_in)
             return
 
-        executed, message = self.execute_command(parsed)
+        executed, message = self.execute_command(parsed, param)
         if not executed:
             self.next_command(last_impossible=message)
             return
@@ -184,9 +261,15 @@ class Adventure(object):
 
     @staticmethod
     def parse_command(input_string):
-        return getattr(Commands, input_string.upper(), None)
 
-    def execute_command(self, command):
+        split = input_string.split(' ')
+        command = split[0]
+
+        param = None if len(split) <= 1 else split[1]
+
+        return getattr(Commands, command.upper(), None), param
+
+    def execute_command(self, command, param):
         if command == Commands.EXIT:
             return self.do_quit()
         if command == Commands.HELP:
@@ -199,6 +282,8 @@ class Adventure(object):
             return self.environment.go_east()
         if command == Commands.WEST:
             return self.environment.go_west()
+        if command == Commands.TAKE:
+            return self.environment.player_take(param)
 
         else:
             return False, self.M_COMMAND_ERROR % command
