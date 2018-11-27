@@ -94,6 +94,12 @@ class Room(object):
                 return thing
         return None
 
+    def get_thing(self, name):
+        for thing in self.things:
+            if thing.name == name:
+                return thing
+        return None
+
     # todo: show open directions of travel in the room when asking for input
 
     def describe(self):
@@ -124,19 +130,35 @@ class Thing(object):
     def add_target_of(self, action, message):
         self.target_of.append((action, message))
 
-    def can_be_target_of(self, action):
+    def remove_source_of(self, action):
+        self.source_of.remove(action)
+
+    def remove_target_of(self, action):
+        to_remove = self._target_action_to_tuple(action)
+
+        if to_remove is not None:
+            self.target_of.remove(to_remove)
+
+    def _target_action_to_tuple(self, action):
         for target in self.target_of:
-            act, _ = target
+            act, mess = target
             if action == act:
-                return True
-        return False
+                return target
+        return None
+
+    def can_be_target_of(self, action):
+        return self._target_action_to_tuple(action) is not None
+
+    def cannot_be_target_of(self, action):
+        return not self.can_be_target_of(action)
 
     def get_target_message_for_action(self, action):
-        for target in self.target_of:
-            act, message = target
-            if action == act:
-                return message
-        return ''
+        target = self._target_action_to_tuple(action)
+        if target is not None:
+            _, message = target
+            return message
+        else:
+            return ''
 
     def can_be_source_of(self, action):
         for source in self.source_of:
@@ -166,6 +188,12 @@ class Player(object):
             if thing.name == thing_name:
                 self.inventory.remove(thing)
                 return
+
+    def item_that_can(self, action):
+        for item in self.inventory:
+            if item.can_be_source_of(action):
+                return item
+        return None
 
 
 class GameEnvironment(object):
@@ -206,16 +234,14 @@ class GameEnvironment(object):
         t_e = Thing('baseball', 'a [baseball] sitting on a chair')
 
         t_b.add_source_of(Commands.UNLOCK)
+        t_b.add_source_of(Commands.LOCK)
         t_d.add_target_of(Commands.UNLOCK,
-                          'The Door is unlocked. You has a feeling that freedom is just beyond that door')
+                          'The door is unlocked. You have a feeling that freedom is not far away.')
+        self.add_trigger(t_d.can_be_target_of, self.win_game, "You win!", Commands.LOCK)
 
         t_e.add_source_of(Commands.THROW)
         t_c.add_target_of(Commands.THROW, 'The window is now broken with a sizable hole in its center.')
-
-        r_b.add_thing(t_b)
-        r_b.add_thing(t_c)
-        r_b.add_thing(t_d)
-        r_b.add_thing(t_e)
+        self.add_trigger(t_c.cannot_be_target_of, self.lose_game, "You lose", Commands.THROW)
 
         r_a.add_south(r_c)
         r_b.add_south(r_d)
@@ -238,6 +264,7 @@ class GameEnvironment(object):
 
         self.current_room = r_b
 
+    # todo go_dir, take, etc. methods should be on the player
     def go_north(self):
         if self.current_room.room_north is not None:
             if self.current_room.room_north.is_visible:
@@ -289,6 +316,7 @@ class GameEnvironment(object):
                 return True, "You have no %s to even try to throw at the %s." % (thing_name, actionable.name)
             elif thing.can_be_source_of(Commands.THROW):
                 result_message = actionable.get_target_message_for_action(Commands.THROW)
+                actionable.remove_target_of(Commands.THROW)
                 self.player.remove_from_inventory(thing_name)
                 return True, "You threw the %s at the %s. \n%s" % (thing_name, actionable.name, result_message)
             else:
@@ -297,21 +325,47 @@ class GameEnvironment(object):
                        % (thing_name, actionable.name)
         return False, "There was nothing to throw the %s at." % thing_name
 
-    def player_unlock(self, thing_name):
-        actionable = self.current_room.get_actionable(Commands.UNLOCK)
-        if actionable is not None:
-            thing = self.player.get(thing_name)
-            if thing is None:
-                return True, "You have no %s to even try to unlock the %s." % (thing_name, actionable.name)
-            elif thing.can_be_source_of(Commands.UNLOCK):
-                result_message = actionable.get_target_message_for_action(Commands.UNLOCK)
-                self.player.remove_from_inventory(thing_name)
-                return True, "You unlocked the %s with the %s. \n%s" % (actionable.name, thing_name, result_message)
+    def player_lock(self, thing_name):
+        target = self.current_room.get_thing(thing_name)
+        if target is None:
+            return True, "You look around fruitlessly for a %s to lock." % thing_name
+        elif target.can_be_target_of(Commands.LOCK):
+            source = self.player.item_that_can(Commands.LOCK)
+            if source is not None:
+                result_message = target.get_target_message_for_action(Commands.LOCK)
+                target.remove_target_of(Commands.LOCK)
+                target.add_target_of(Commands.UNLOCK, "The %s is now unlocked" % target.name)
+                return True, "You locked the %s with the %s. \n%s" % (target.name, source.name, result_message)
             else:
-                return True, \
-                       "You tried to unlock the %s with the %s, but it didn't fit quite right." \
-                       % (actionable.name, thing_name)
-        return False, "There was nothing to unlock the %s with." % thing_name
+                return False, "There was nothing to lock the %s with." % thing_name
+        elif target.can_be_target_of(Commands.UNLOCK):
+            return True, "You find that the %s is already locked." % thing_name
+        else:
+            return True, "You ponder for a lengthy while, but fail to figure a way to lock the %s." % thing_name
+
+    def player_unlock(self, thing_name):
+        target = self.current_room.get_thing(thing_name)
+        if target is None:
+            return True, "You look around fruitlessly for a %s to unlock." % thing_name
+        elif target.can_be_target_of(Commands.UNLOCK):
+            source = self.player.item_that_can(Commands.UNLOCK)
+            if source is not None:
+                result_message = target.get_target_message_for_action(Commands.UNLOCK)
+                target.remove_target_of(Commands.UNLOCK)
+                target.add_target_of(Commands.LOCK, "The %s is now locked" % target.name)
+                return True, "You locked the %s with the %s. \n%s" % (target.name, source.name, result_message)
+            else:
+                return False, "You have nothing to unlock the %s with." % thing_name
+        elif target.can_be_target_of(Commands.LOCK):
+            return True, "You find that the %s is already unlocked." % thing_name
+        else:
+            return True, "You ponder for a lengthy while, but fail to figure a way to unlock the %s." % thing_name
+
+    def win_game(self):
+        self.game_is_won = True
+
+    def lose_game(self):
+        self.game_is_lost = True
 
     def add_trigger(self, condition, result, message, args):
         self.triggers.append((condition, result, message, args))
@@ -331,7 +385,7 @@ class GameEnvironment(object):
 
 
 class Commands(object):
-    HELP, EXIT, NORTH, SOUTH, EAST, WEST, TAKE, THROW, UNLOCK = range(9)
+    HELP, EXIT, NORTH, SOUTH, EAST, WEST, TAKE, THROW, LOCK, UNLOCK = range(10)
 
 
 class Adventure(object):
@@ -348,14 +402,23 @@ class Adventure(object):
         self.ui = UserInterface(interface_type)
         self.environment = GameEnvironment()
 
+    def check_for_loss(self):
+        if self.environment.game_is_lost:
+            self.game_over = True
+
+    def check_for_win(self):
+        if self.environment.game_is_won:
+            self.game_over = True
+
     def play(self):
 
         self.ui.show(self.M_START)
-        self.ui.show(Room.M_NOW_IN_ROOM % self.environment.current_room.name)
         self.ui.show(self.environment.current_room.describe())
 
         while not self.game_over:
             self.next_command()
+            self.check_for_loss()
+            self.check_for_win()
 
     def next_command(self, last_invalid=None, last_impossible=None):
         to_ask = self.M_COMMAND_ASK
@@ -391,7 +454,6 @@ class Adventure(object):
 
         return getattr(Commands, command.upper(), None), param
 
-    # todo go_dir, take, etc. methods should be on the player
     def execute_command(self, command, param):
         if command == Commands.EXIT:
             return self.do_quit()
@@ -409,6 +471,8 @@ class Adventure(object):
             return self.environment.player_take(param)
         if command == Commands.THROW:
             return self.environment.player_throw(param)
+        if command == Commands.LOCK:
+            return self.environment.player_lock(param)
         if command == Commands.UNLOCK:
             return self.environment.player_unlock(param)
 
@@ -428,6 +492,7 @@ class Adventure(object):
 
 
 def main():
-    print("adventure game")
     game = Adventure(UserInterface.CONSOLE)
     game.play()
+
+# todo: add unit tests
