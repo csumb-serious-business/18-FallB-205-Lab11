@@ -6,6 +6,24 @@
 # R Talmage
 ###############################################################################
 
+# Game Guide
+# map
+# A   B
+# |   |
+# C - D - E - H
+#     |   |
+#     F - G
+#
+# legend
+# A your neighbor's room
+# B your room (start)
+# C far hall - window [throw baseball -> lose game]
+# D your hall
+# E office - book [take reveals H], key
+# F rec room - baseball
+# G lobby - door [unlock door (need key) -> win game]
+# H secret room
+
 # todo: add pydocs to each function
 
 try:
@@ -396,21 +414,6 @@ class GameEnvironment(object):
     """
     models a game environment -- where all the game objects interact
     """
-
-    # A   B
-    # |   |
-    # C - D - E - H
-    #     |   |
-    #     F - G
-    #
-    # A your neighbor's room
-    # B your room (start)
-    # C far hall - window
-    # D your hall
-    # E office - book, key
-    # F rec room - baseball
-    # G lobby - door (locked)
-    # H secret room
 
     def __init__(self):
         """
@@ -874,7 +877,7 @@ def main():
     convenience function for starting the game
     :return: None
     """
-    game = Adventure(UserInterface.CONSOLE)
+    game = Adventure(UserInterface.JES)
     game.play()
 
 
