@@ -213,5 +213,5 @@ class Adventure(object):
 
 def main():
     print("adventure game")
-    game = Adventure(UserInterface.CONSOLE)
+    game = Adventure(UserInterface.JES)
     game.play()
