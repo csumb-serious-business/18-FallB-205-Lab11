@@ -1,4 +1,4 @@
-# Lab 13: Adventure Game Enhanced
+# Lab 13 Part 2: Adventure Game Enhanced Again
 
 ### authors ###################################################################
 # J Asato
