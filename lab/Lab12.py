@@ -24,8 +24,9 @@
 # G lobby - door [unlock door (need key) -> win game]
 # H secret room
 
-# todo: add pydocs to each function
+import sys, time
 
+# use shim in non-JES environment, otherwise ignore
 try:
     from JES_shim import showInformation, requestString
 except ImportError:
@@ -71,6 +72,28 @@ class UserInterface(object):
             return raw_input(message)
 
 
+class Log(object):
+    """
+    a rudimentary logger, without configuration (other than enable/disable)
+      or logging levels other than info
+    """
+    enabled = True
+
+    @staticmethod
+    def info(message):
+        """
+        logs a system message with a timestamp (usually for debugging)
+        :param message: the message to log
+        :return: None
+        """
+        if Log.enabled:
+            caller = sys._getframe(1).f_code.co_name
+            if message != '...':
+                print('info %s | %s -- %s' % (time.time(), caller, message))
+            else:
+                print('info %s | %s called' % (time.time(), caller))
+
+
 class Room(object):
     """
     models a room in the game environment
@@ -97,6 +120,7 @@ class Room(object):
         self.room_east = None
         self.room_west = None
         self.things = []
+        Log.info("new room created -- %s" % self.name)
 
     def add_north(self, other):
         """
@@ -111,6 +135,7 @@ class Room(object):
             raise ValueError(self.M_CANNOT_ADD)
         self.room_north = other
         other.room_south = self
+        Log.info("south: %s, north: %s" % (self.name, other.name))
 
     def add_south(self, other):
         """
@@ -125,6 +150,7 @@ class Room(object):
             raise ValueError(self.M_CANNOT_ADD)
         self.room_south = other
         other.room_north = self
+        Log.info("north: %s, south: %s" % (self.name, other.name))
 
     def add_east(self, other):
         """
@@ -139,6 +165,7 @@ class Room(object):
             raise ValueError(self.M_CANNOT_ADD)
         self.room_east = other
         other.room_west = self
+        Log.info("west: %s, east: %s" % (self.name, other.name))
 
     def add_west(self, other):
         """
@@ -153,6 +180,7 @@ class Room(object):
             raise ValueError(self.M_CANNOT_ADD)
         self.room_west = other
         other.room_east = self
+        Log.info("east: %s, west: %s" % (self.name, other.name))
 
     def add_thing(self, thing):
         """
@@ -161,6 +189,7 @@ class Room(object):
         :return: None
         """
         self.things.append(thing)
+        Log.info("room: %s, thing: %s" % (self.name, thing.name))
 
     def thing_there(self, thing):
         """
@@ -168,7 +197,9 @@ class Room(object):
         :param thing: the thing to find
         :return: True if the thing is present
         """
-        return self.things.__contains__(thing)
+        result = self.things.__contains__(thing)
+        Log.info("room: %s, thing: %s, result: %s" % (self.name, thing.name, result))
+        return result
 
     def thing_missing(self, thing):
         """
@@ -176,13 +207,16 @@ class Room(object):
         :param thing: the thing to find
         :return: True if the thing is NOT present
         """
-        return not self.things.__contains__(thing)
+        result = not self.things.__contains__(thing)
+        Log.info("room: %s, thing: %s, result: %s" % (self.name, thing.name, result))
+        return result
 
     def make_visible(self):
         """
         makes this room visible to the user
         :return: None
         """
+        Log.info("room: %s" % self.name)
         self.is_visible = True
 
     def make_invisible(self):
@@ -190,6 +224,7 @@ class Room(object):
         makes this room invisible to the user
         :return: None
         """
+        Log.info("room: %s" % self.name)
         self.is_visible = False
 
     def get_can_be_target_of(self, action):
@@ -200,6 +235,7 @@ class Room(object):
         """
         for thing in self.things:
             if thing.can_be_target_of(action):
+                Log.info("room: %s" % self.name)
                 return thing
         return None
 
@@ -211,7 +247,9 @@ class Room(object):
         """
         for thing in self.things:
             if thing.name == name:
+                Log.info("found -- room: %s, thing: %s" % (self.name, thing.name))
                 return thing
+        Log.info("not found -- room: %s, thing: %s" % (self.name, name))
         return None
 
     # todo: show open directions of travel in the room when asking for input
@@ -231,6 +269,7 @@ class Room(object):
                     list_str += " (" + thing.hint + ")"
 
             message += '\n' + self.M_INSIDE + list_str
+        Log.info("...")
         return message
 
 
@@ -257,6 +296,7 @@ class Thing(object):
         self.can_take = removable
         self.source_of = []
         self.target_of = []
+        Log.info("new thing created -- %s" % self.name)
 
     def add_source_of(self, action):
         """
@@ -265,6 +305,7 @@ class Thing(object):
         :param action: the action this can be the source of
         :return: None
         """
+        Log.info("source: %s, action: %s" % (self.name, action))
         self.source_of.append(action)
 
     def add_target_of(self, action, message):
@@ -275,6 +316,7 @@ class Thing(object):
         :param message: a message to show then the action occurs
         :return: None
         """
+        Log.info("target: %s, action: %s" % (self.name, action))
         self.target_of.append((action, message))
 
     def remove_source_of(self, action):
@@ -284,6 +326,7 @@ class Thing(object):
         :param action: the action to remove
         :return: None
         """
+        Log.info("source: %s, action: %s" % (self.name, action))
         self.source_of.remove(action)
 
     def remove_target_of(self, action):
@@ -293,12 +336,14 @@ class Thing(object):
         :param action: the action to remove
         :return: None
         """
+        Log.info("target: %s, action: %s" % (self.name, action))
         to_remove = self._target_action_to_tuple(action)
 
         if to_remove is not None:
             self.target_of.remove(to_remove)
 
     def _target_action_to_tuple(self, action):
+        Log.info("target: %s, action: %s" % (self.name, action))
         for target in self.target_of:
             act, mess = target
             if action == act:
@@ -311,7 +356,9 @@ class Thing(object):
         :param action: the action to check
         :return: True if the action can be performed on this Thing
         """
-        return self._target_action_to_tuple(action) is not None
+        result = self._target_action_to_tuple(action) is not None
+        Log.info("target: %s, action: %s, result: %s" % (self.name, action, result))
+        return result
 
     def cannot_be_target_of(self, action):
         """
@@ -319,7 +366,9 @@ class Thing(object):
         :param action: the action to check
         :return: True if the action can NOT be performed on this Thing
         """
-        return not self.can_be_target_of(action)
+        result = not self.can_be_target_of(action)
+        Log.info("target: %s, action: %s, result: %s" % (self.name, action, result))
+        return result
 
     def get_target_message_for_action(self, action):
         """
@@ -330,6 +379,7 @@ class Thing(object):
         or '' if the action is not in this Thing's targets
         """
         target = self._target_action_to_tuple(action)
+        Log.info("target: %s, action: %s" % (self.name, action))
         if target is not None:
             _, message = target
             return message
@@ -342,10 +392,12 @@ class Thing(object):
         :param action: the action to check
         :return: True if the action can be performed using this Thing
         """
+        result = False
         for source in self.source_of:
             if action == source:
-                return True
-        return False
+                result = True
+        Log.info("target: %s, action: %s, result: %s" % (self.name, action, result))
+        return result
 
 
 class Player(object):
@@ -362,6 +414,7 @@ class Player(object):
         creates a new player
         """
         self.inventory = []
+        Log.info("new player created")
 
     def has(self, thing_name):
         """
@@ -370,7 +423,9 @@ class Player(object):
         :param thing_name: the name to check
         :return: True if the item is present in the Player's inventory
         """
-        return self.get(thing_name) is not None
+        result = self.get(thing_name) is not None
+        Log.info("thing: %s, result: %s" % (thing_name, result))
+        return result
 
     def get(self, thing_name):
         """
@@ -379,6 +434,7 @@ class Player(object):
         :return: the item from the Player's inventory
         or None if it was not found
         """
+        Log.info("thing: %s" % thing_name)
         for thing in self.inventory:
             if thing.name == thing_name:
                 return thing
@@ -391,6 +447,7 @@ class Player(object):
         :param thing_name: the name of the item to remove
         :return: None
         """
+        Log.info("thing: %s" % thing_name)
         for thing in self.inventory:
             if thing.name == thing_name:
                 self.inventory.remove(thing)
@@ -404,6 +461,7 @@ class Player(object):
         :return: the first item found that can perform the given action
         or None if not found
         """
+        Log.info("action: %s" % action)
         for item in self.inventory:
             if item.can_be_source_of(action):
                 return item
@@ -478,6 +536,7 @@ class GameEnvironment(object):
 
         # set the initial room
         self.current_room = r_b
+        Log.info("new game environment created")
 
     # todo go_dir, take, etc. methods should be on the player
     def go_north(self):
@@ -487,6 +546,7 @@ class GameEnvironment(object):
            the bool: True if the attempt was successful
            the string: the message to show the user
         """
+        Log.info('...')
         if self.current_room.room_north is not None:
             if self.current_room.room_north.is_visible:
                 self.current_room = self.current_room.room_north
@@ -500,6 +560,7 @@ class GameEnvironment(object):
            the bool: True if the attempt was successful
            the string: the message to show the user
         """
+        Log.info('...')
         if self.current_room.room_south is not None:
             if self.current_room.room_south.is_visible:
                 self.current_room = self.current_room.room_south
@@ -513,6 +574,7 @@ class GameEnvironment(object):
            the bool: True if the attempt was successful
            the string: the message to show the user
         """
+        Log.info('...')
         if self.current_room.room_east is not None:
             if self.current_room.room_east.is_visible:
                 self.current_room = self.current_room.room_east
@@ -526,6 +588,7 @@ class GameEnvironment(object):
            the bool: True if the attempt was successful
            the string: the message to show the user
         """
+        Log.info('...')
         if self.current_room.room_west is not None:
             if self.current_room.room_west.is_visible:
                 self.current_room = self.current_room.room_west
@@ -540,6 +603,7 @@ class GameEnvironment(object):
            the bool: True if the attempt was successful
            the string: the message to show the user
         """
+        Log.info('...')
         found = None
         for thing in self.current_room.things:
             if thing.name == thing_name:
@@ -566,6 +630,7 @@ class GameEnvironment(object):
            the bool: True if the attempt was successful
            the string: the message to show the user
         """
+        Log.info('...')
         target = self.current_room.get_can_be_target_of(Commands.THROW)
         if target is not None:
             source = self.player.get(thing_name)
@@ -593,6 +658,7 @@ class GameEnvironment(object):
            the bool: True if the attempt was successful
            the string: the message to show the user
         """
+        Log.info('...')
         target = self.current_room.get_thing(thing_name)
         if target is None:
             return False, "You look around fruitlessly for a %s to lock." % thing_name
@@ -621,6 +687,7 @@ class GameEnvironment(object):
            the bool: True if the attempt was successful
            the string: the message to show the user
         """
+        Log.info('...')
         target = self.current_room.get_thing(thing_name)
         if target is None:
             return False, "You look around fruitlessly for a %s to unlock." % thing_name
@@ -643,6 +710,7 @@ class GameEnvironment(object):
         sets the won game condition to True
         :return: None
         """
+        Log.info('...')
         self.game_is_won = True
 
     def lose_game(self):
@@ -650,6 +718,7 @@ class GameEnvironment(object):
         sets the lost game condition to True
         :return: None
         """
+        Log.info('...')
         self.game_is_lost = True
 
     def add_trigger(self, condition, result, message, args):
@@ -665,6 +734,7 @@ class GameEnvironment(object):
         :param args: the args to pass to the condition before evaluation
         :return: None
         """
+        Log.info("condition: %s, result: %s, message: %s, args: %s" % (condition, result, message, args))
         self.triggers.append((condition, result, message, args))
 
     def execute_triggers(self):
@@ -675,6 +745,7 @@ class GameEnvironment(object):
         whenever a trigger is completed, it is removed from this environment's triggers
         :return: the aggregate messages from all completed triggers
         """
+        Log.info('...')
         messages = None
         for trigger in self.triggers:
             condition, result, message, args = trigger
@@ -722,12 +793,14 @@ class Adventure(object):
         # set initial game state
         self.game_over = False
         self.environment = GameEnvironment()
+        Log.info("creating a new adventure -- interface_type: %s" % interface_type)
 
     def check_for_loss(self):
         """
         checks if the player has lost the game, game_over becomes True
         :return: None
         """
+        Log.info('...')
         if self.environment.game_is_lost:
             self.game_over = True
 
@@ -736,6 +809,7 @@ class Adventure(object):
         checks if the player has won the game, game_over becomes True
         :return: None
         """
+        Log.info('...')
         if self.environment.game_is_won:
             self.game_over = True
 
@@ -744,7 +818,7 @@ class Adventure(object):
         begins running the game
         :return: None
         """
-
+        Log.info('...')
         # show the player the intro message
         self.ui.show(self.M_START)
 
@@ -767,7 +841,7 @@ class Adventure(object):
            impossible in the game-state
         :return: None
         """
-
+        Log.info("last_invalid: %s, last_impossible: %s" % (last_invalid, last_impossible))
         # set the message based on last response (correct, invalid, impossible)
         to_ask = self.M_COMMAND_ASK
 
@@ -808,7 +882,7 @@ class Adventure(object):
         :return: the Tuple(Command, parameter)
             if the parameter is missing, it will be returned as None
         """
-
+        Log.info("input_string: %s" % input_string)
         split = input_string.split(' ')
         command = split[0]
 
@@ -825,6 +899,7 @@ class Adventure(object):
             the bool: whether the execution attempt was successful
             the string: a message to display to the user
         """
+        Log.info("command: %s, param: %s" % (command, param))
         if command == Commands.EXIT:
             return self.do_exit()
         if command == Commands.HELP:
@@ -855,6 +930,7 @@ class Adventure(object):
            the bool: True -- always will be successful
            the string: the game exit message
         """
+        Log.info('...')
         self.game_over = True
         return True, self.M_EXIT
 
@@ -865,9 +941,11 @@ class Adventure(object):
            the bool: True -- always will be successful
            the string: the game help message
         """
+        Log.info('...')
         return True, self.M_START
 
     def notify_state_changes(self, message):
+        Log.info("message: %s" % message)
         if message is not None:
             self.ui.show(message)
 
@@ -877,7 +955,8 @@ def main():
     convenience function for starting the game
     :return: None
     """
-    game = Adventure(UserInterface.JES)
+    Log.enabled = True
+    game = Adventure(UserInterface.CONSOLE)
     game.play()
 
 
@@ -988,21 +1067,18 @@ def t_room_get_can_be_target_of():
 
 # === a rudimentary unit testing framework ===================================#
 def check(expect, actual):
-    import sys
     caller = sys._getframe(1).f_code.co_name
     result = 'PASS' if expect == actual else 'FAIL'
     print("%s -- %s -- expected: %s, actual: %s" % (caller, result, expect, actual))
 
 
 def check_true(actual):
-    import sys
     caller = sys._getframe(1).f_code.co_name
     result = 'PASS' if actual else 'FAIL'
     print("%s -- %s -- expected: True, actual: %s" % (caller, result, actual))
 
 
 def check_false(actual):
-    import sys
     caller = sys._getframe(1).f_code.co_name
     result = 'PASS' if not actual else 'FAIL'
     print("%s -- %s -- expected: False, actual: %s" % (caller, result, actual))
